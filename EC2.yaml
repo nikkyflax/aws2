@@ -1,0 +1,87 @@
+# AWSTemplateFormatVersion: 2010-09-09
+# Resources: 
+#   #Creates a Launch Template to be used by an auto scaling group
+#   LaunchTemplateNiklas: 
+#     Type: 'AWS::EC2::LaunchTemplate' #Type of Resource
+#     Properties: 
+#       LaunchTemplateName: !Sub '${AWS::StackName}-launch-template-for-auto-scaling' #The name of the Launch Template, it will take the stackname and add "-launch-template-for-auto-scaling"
+#       LaunchTemplateData: 
+#         SecurityGroupIds: #Specifys the Security Groups the Launch Template will use
+#           - !GetAtt HTTPSecGroup.GroupId #Gets the ID of from the HTTPSecGroup
+#           - !GetAtt SSHSecGroup.GroupId #Gets the ID of from the SSHSecGroup
+#         ImageId: !Ref ImageId # Refers to and uses the ImageID parameter
+#         InstanceType: !Ref InstanceType #Refers to and uses the InstanceType parameter
+#         KeyName: !Ref Key1 #Refers to and uses the Key pair parameter
+#         UserData: #adds commands to be run at the creation of Instances created from this template
+#           Fn::Base64: 
+#             !Sub |
+#               #!/bin/bash
+#               yum update -y
+#               amazon-linux-extras install nginx1 -y
+#               systemctl start nginx
+#               systemctl enable nginx
+#               echo This is a webapplication created by NIKLAS ANDERSSON from $(hostname -f) > /usr/share/nginx/html/index.html
+  
+Parameters:
+  ImageId:
+    Type: String
+    Description: 'Linux 2 AMI for Ireland eu-west1 Region'
+    Default: 'ami-0c1bc246476a5572b'
+  InstanceType:
+    Type: String
+    Description: Choosing t2 micro because it is free
+    Default: t2.micro
+  Key1:
+    Description: SSH Keypair to login to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: key1
+  Snet1:
+    Description: Subnet1 ID
+    Type: String
+    Default: subnet-00a52f2365b335e45
+  Snet2:
+    Description: Subnet2 ID
+    Type: String
+    Default: subnet-06214732dec4ac159	
+  Snet3:
+    Description: Subnet3 ID
+    Type: String
+    Default: subnet-0a59b2fb9b98b7bc7
+  VPCID:
+    Description: VPC ID
+    Type: String
+    Default: vpc-0e255d330e11af1f4
+
+Resources:  
+  WPec2:
+    Type: AWS::EC2::Instance
+    Properties: 
+      SubnetId: 
+        - !Ref Snet1
+        - !Ref Snet1
+        - !Ref Snet1
+      ImageID: !Ref ImageID
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref Key1
+      SecurityGroupIds: 
+       - !GetAtt HTTPG.GroupId 
+       - !GetAtt SSHG.GroupId 
+  
+ SSHG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Instance to allow SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+  HTTPG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Instance to allow HTTP access via port 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0 

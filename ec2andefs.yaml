@@ -1,0 +1,149 @@
+---
+
+Parameters:
+  ImageId:
+    Type: String
+    Description: 'Linux 2 AMI for Ireland eu-west1 Region'
+    Default: 'ami-0c1bc246476a5572b'
+  InstanceType:
+    Type: String
+    Description: Choosing t2 micro because it is free
+    Default: t2.micro
+  Key1:
+    Description: SSH Keypair to login to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: key1
+  Snet1:
+    Description: Subnet1 ID
+    Type: String
+    Default: subnet-00a52f2365b335e45
+  Snet2:
+    Description: Subnet2 ID
+    Type: String
+    Default: subnet-06214732dec4ac159	
+  Snet3:
+    Description: Subnet3 ID
+    Type: String
+    Default: subnet-0a59b2fb9b98b7bc7
+  VPCID:
+    Description: VPC ID
+    Type: String
+    Default: vpc-0e255d330e11af1f4
+  
+
+Resources:
+  HTTPSecGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Instance to allow HTTP access via port 80
+      SecurityGroupIngress:
+        IpProtocol: tcp
+        SourceSecurityGroupName: !Ref HTTPminALBFrontEnd
+        FromPort: 80
+        ToPort: 80
+  SSHSecGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Instance to allow SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+  HTTPminALBFrontEnd:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: LoadBalancer to allow HTTP access to minTargetGroup 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  
+  
+  
+  WPInstanceSecGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties: 
+      GroupDescription: Instance to EFS and RDS
+  EFSSecGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Instance to allow EFS access
+      SecurityGroupIngress:
+        IpProtocol: tcp
+        SourceSecurityGroupName: !Ref WPInstanceSecGroup
+        FromPort: 2049
+        ToPort: 2049
+      VpcId: !Ref VPCID
+ 
+  EFS1:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      BackupPolicy:
+        Status: DISABLED
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: TestEFS
+
+  EFSMountTargetSub1:  
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: !Ref EFS1
+      SecurityGroups: 
+        - !GetAtt EFSSecGroup.GroupId
+      SubnetId: !Ref Snet1
+
+  EFSMountTargetSub2:  
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: !Ref EFS1
+      SecurityGroups: 
+        - !GetAtt EFSSecGroup.GroupId
+      SubnetId: !Ref Snet2
+
+  EFSMountTargetSub3:  
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: !Ref EFS1
+      SecurityGroups: 
+        - !GetAtt EFSSecGroup.GroupId
+      SubnetId: !Ref Snet3
+
+  WPec2:
+    Type: AWS::EC2::Instance
+    DependsOn: 
+      - EFSMountTargetSub1
+      - EFSMountTargetSub2
+      - EFSMountTargetSub3
+    Properties: 
+      SubnetId: 
+        Ref: Snet1
+        Ref: Snet2
+        Ref: Snet3
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref Key1
+      SecurityGroupIds: 
+        - !GetAtt HTTPSecGroup.GroupId 
+        - !GetAtt SSHSecGroup.GroupId
+        - !GetAtt WPInstanceSecGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: test
+      UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              yum update -y
+              yum install -y amazon-efs-utils
+              mkdir /var/www
+              groupadd www
+              usermod -a -G www ec2-user
+              chgrp -R www /var/www
+              chmod 2775 /var/www
+              find /var/www -type d -exec sudo chmod 2775 {} +
+              find /var/www -type f -exec sudo chmod 0664 {} +
+              mount -t efs ${EFS1} /var/www
+              
