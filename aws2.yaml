@@ -123,17 +123,14 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties: 
       AllocatedStorage: 20
-      # AvailabilityZone: eu-west-1
       BackupRetentionPeriod: 0
       DBInstanceClass: db.t3.micro
       DBInstanceIdentifier: !Sub '${AWS::StackName}-dbinstance'
-      DBName: ApacheDBnamn
-      # DBSecurityGroups: 
-      #   - !Ref RDSSecGroup
+      DBName: WP_DB_MAIN
       Engine: mysql
       EngineVersion: 8.0.28
       MasterUsername: admin
-      MasterUserPassword: losenord
+      MasterUserPassword: Kanelbulle1337!
       Port: 3306
       PubliclyAccessible: no
       VPCSecurityGroups: 
@@ -162,7 +159,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2'
-      InstanceInitiatedShutdownBehavior: Terminate
+      InstanceInitiatedShutdownBehavior: terminate
       UserData:
           Fn::Base64: 
             !Sub |
@@ -191,16 +188,25 @@ Resources:
               cp -r wordpress/* /var/www/html/
               cd /var/www/html
               cp wp-config-sample.php wp-config.php
-              sed -i 's/database_name_here/ApacheDBnamn/' wp-config.php
+              sed -i 's/database_name_here/WP_DB_MAIN/' wp-config.php
               sed -i 's/username_here/admin/' wp-config.php
-              sed -i 's/password_here/losenord/' wp-config.php
+              sed -i 's/password_here/Kanelbulle1337!/' wp-config.php
               sed -i 's/localhost*/${RDSmySQL.Endpoint.Address}:3306/' wp-config.php
               SALT=$(curl -L https://api.wordpress.org/secret-key/1.1/salt/)
               STRING='put your unique phrase here'
               printf '%s\n' "g/$STRING/d" a "$SALT" . w | ed -s wp-config.php
               sed -i '/<Directory "\/var\/www\/html">/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/httpd/conf/httpd.conf
               sudo yum install php-gd
-              sudo systemctl restart httpd
+              yum install php-mbstring php-xml -y
+              systemctl restart httpd
+              systemctl restart php-fpm
+              cd /var/www/html
+              wget https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.tar.gz
+              mkdir phpMyAdmin && tar -xvzf phpMyAdmin-latest-all-languages.tar.gz -C phpMyAdmin --strip-components 1
+              rm phpMyAdmin-latest-all-languages.tar.gz
+              cd /var/www/html/phpMyAdmin
+              cp config.sample.inc.php config.inc.php
+              sed -i 's/localhost/${RDSmySQL.Endpoint.Address}:3306/' config.inc.php
               shutdown now
   
   LaunchTemplateNiklas: 
@@ -243,6 +249,9 @@ Resources:
               amazon-linux-extras install epel -y
               yum update -y
               yum install stress -y
+              yum install php-mbstring php-xml -y
+              systemctl restart httpd
+              systemctl restart php-fpm
 
 
   AutoscalingGroup1:
